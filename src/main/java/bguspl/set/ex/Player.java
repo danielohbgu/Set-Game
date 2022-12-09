@@ -74,7 +74,7 @@ public class Player implements Runnable {
     @Override
     public void run() {
         playerThread = Thread.currentThread();
-        env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + "starting.");
+        env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " starting.");
         if (!human) createArtificialIntelligence();
 
         while (!terminate) {

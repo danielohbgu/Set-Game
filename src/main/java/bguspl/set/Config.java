@@ -61,12 +61,12 @@ public class Config {
     public final long turnTimeoutWarningMillis;
 
     /**
-     * The number of milliseconds a player gets frozen for when he scores a point
+     * The number of milliseconds a player gets frozen for when penalized
      */
     public final long penaltyFreezeMillis;
 
     /**
-     * The number of milliseconds a player gets frozen for when penalized
+     * The number of milliseconds a player gets frozen for when he scores a point
      */
     public final long pointFreezeMillis;
 

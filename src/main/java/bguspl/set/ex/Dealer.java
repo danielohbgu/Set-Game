@@ -54,7 +54,7 @@ public class Dealer implements Runnable {
         while (!shouldFinish()) {
             placeCardsOnTable();
             timerLoop();
-            updateTimerDisplay(false);
+            updateTimerDisplay(false); // should be true ?
             removeAllCardsFromTable();
         }
         announceWinners();
