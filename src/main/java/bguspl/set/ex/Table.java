@@ -25,11 +25,6 @@ public class Table {
     protected final Integer[] slotToCard; // card per slot (if any)
 
     /**
-     * Mapping between a slot and the token placed in it (null if none).
-     */
-    protected final Integer[] slotToToken; // card per slot (if any)
-
-    /**
      * Mapping between a card and the slot it is in (null if none).
      */
     protected final Integer[] cardToSlot; // slot per card (if any)
@@ -41,11 +36,10 @@ public class Table {
      * @param slotToCard - mapping between a slot and the card placed in it (null if none).
      * @param cardToSlot - mapping between a card and the slot it is in (null if none).
      */
-    public Table(Env env, Integer[] slotToCard, Integer[] cardToSlot, Integer[] slotToToken) {
+    public Table(Env env, Integer[] slotToCard, Integer[] cardToSlot) {
         this.env = env;
         this.slotToCard = slotToCard;
         this.cardToSlot = cardToSlot;
-        this.slotToToken = slotToToken;
     }
 
     /**
@@ -55,7 +49,7 @@ public class Table {
      */
     public Table(Env env) {
 
-        this(env, new Integer[env.config.tableSize], new Integer[env.config.deckSize], new Integer[env.config.tableSize]);
+        this(env, new Integer[env.config.tableSize], new Integer[env.config.deckSize]);
     }
 
     /**

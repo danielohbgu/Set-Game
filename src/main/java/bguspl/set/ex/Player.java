@@ -23,6 +23,11 @@ public class Player implements Runnable {
     private final Table table;
 
     /**
+     * The slot of each token (null if token is not placed yet)
+     */
+    private final Integer[] tokensToSlots;
+
+    /**
      * The id of the player (starting from 0).
      */
     public final int id;
@@ -66,6 +71,7 @@ public class Player implements Runnable {
         this.table = table;
         this.id = id;
         this.human = human;
+        this.tokensToSlots = new Integer[3];
     }
 
     /**
