@@ -1,9 +1,11 @@
 package bguspl.set.ex;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 import java.util.logging.Level;
 
 import bguspl.set.Env;
-import sun.font.TrueTypeFont;
 
 /**
  * This class manages the players' threads and data
@@ -24,9 +26,14 @@ public class Player implements Runnable {
     private final Table table;
 
     /**
+     * The game dealer
+     */
+    private final Dealer dealer;
+
+    /**
      * The slot of each token (null if token is not placed yet)
      */
-    private final Integer[] tokensToSlots;
+    private final List<Integer> tokensToSlots;
 
     /**
      * The id of the player (starting from 0).
@@ -69,10 +76,11 @@ public class Player implements Runnable {
      */
     public Player(Env env, Dealer dealer, Table table, int id, boolean human) {
         this.env = env;
+        this.dealer = dealer;
         this.table = table;
         this.id = id;
         this.human = human;
-        this.tokensToSlots = new Integer[3];
+        this.tokensToSlots = new ArrayList<>();
     }
 
     /**
@@ -85,7 +93,10 @@ public class Player implements Runnable {
         if (!human) createArtificialIntelligence();
 
         while (!terminate) {
-            // TODO implement main player loop
+            try {
+                wait();
+            } catch (InterruptedException ignored) {}
+
         }
         if (!human) try { aiThread.join(); } catch (InterruptedException ignored) {}
         env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " terminated.");
@@ -100,7 +111,8 @@ public class Player implements Runnable {
         aiThread = new Thread(() -> {
             env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " starting.");
             while (!terminate) {
-                // TODO implement player key press simulator
+                Random rand = new Random();
+                keyPressed(rand.nextInt(12));
                 try {
                     synchronized (this) { wait(); }
                 } catch (InterruptedException ignored) {}
@@ -116,11 +128,15 @@ public class Player implements Runnable {
      * @return true iff the token is present on the corresponding slot number
      */
     public boolean isTokenPresent(int slot){
-        for (Integer tokenSlot: tokensToSlots)
-            if (tokenSlot == slot)
-                return true;
+        return tokensToSlots.contains(slot);
+    }
 
-        return false;
+    public List<Integer> getTokensToSlots() {
+        return tokensToSlots;
+    }
+
+    public void removeToken(int slot){
+        tokensToSlots.remove(slot);
     }
 
     /**
@@ -136,7 +152,21 @@ public class Player implements Runnable {
      * @param slot - the slot corresponding to the key pressed.
      */
     public void keyPressed(int slot) {
-        // TODO implement
+        if (isTokenPresent(slot) && tokensToSlots.size() > 0) {
+            // remove token
+            tokensToSlots.remove(slot);
+            table.removeToken(id, slot);
+        }
+        else if (!isTokenPresent(slot) && tokensToSlots.size() < 3) {
+            // place token
+            tokensToSlots.add(slot);
+            table.placeToken(id, slot);
+        }
+
+        if (tokensToSlots.size() == 3)
+            dealer.notify();
+
+        notifyAll();
     }
 
     /**
