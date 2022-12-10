@@ -18,6 +18,7 @@ class TableTest {
     Table table;
     private Integer[] slotToCard;
     private Integer[] cardToSlot;
+    private Integer[] slotToToken;
 
     @BeforeEach
     void setUp() {
@@ -34,9 +35,10 @@ class TableTest {
         Config config = new Config(logger, properties);
         slotToCard = new Integer[config.tableSize];
         cardToSlot = new Integer[config.deckSize];
+        slotToToken = new Integer[config.deckSize];
 
         Env env = new Env(logger, config, new MockUserInterface(), new MockUtil());
-        table = new Table(env, slotToCard, cardToSlot);
+        table = new Table(env, slotToCard, cardToSlot, slotToToken);
     }
 
     private int fillSomeSlots() {

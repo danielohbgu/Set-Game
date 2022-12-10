@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Random;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.anyLong;
 
 @ExtendWith(MockitoExtension.class)
 class PlayerTest {
@@ -69,5 +71,27 @@ class PlayerTest {
 
         // check that ui.setScore was called with the player's id and the correct score
         verify(ui).setScore(eq(player.id), eq(expectedScore));
+    }
+
+    @Test
+    void keyPressed() {
+        // generate a random slot number
+        Random rand = new Random();
+        int slot = rand.nextInt(12);
+
+        // call the method we are testing
+        player.keyPressed(slot);
+
+        // check that the token placing method was called
+        verify(ui).placeToken(eq(player.id), eq(slot));
+    }
+
+    @Test
+    void penalty() {
+        // call the method we are testing
+        player.penalty();
+
+        // check that ui.setFreeze was called with the player's id and penalty millis
+        verify(ui).setFreeze(eq(player.id), anyLong());
     }
 }
