@@ -8,6 +8,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -56,10 +57,6 @@ class PlayerTest {
 
     @Test
     void point() {
-
-        // force table.countCards to return 3
-        when(table.countCards()).thenReturn(3); // this part is just for demonstration
-
         // calculate the expected score for later
         int expectedScore = player.getScore() + 1;
 
@@ -79,11 +76,19 @@ class PlayerTest {
         Random rand = new Random();
         int slot = rand.nextInt(12);
 
+        // check if a token was placed on the slot
+        boolean isTokenPresentBefore = player.isTokenPresent(slot);
+
         // call the method we are testing
         player.keyPressed(slot);
 
-        // check that the token placing method was called
-        verify(ui).placeToken(eq(player.id), eq(slot));
+        // check if the token was removed/placed depending on isTokenPresentBefore (should be the opposite)
+        assertTrue(player.isTokenPresent(slot) != isTokenPresentBefore);
+
+        // if a token was present before, check that ui.removeToken was called with the player's id and the correct score
+        if(isTokenPresentBefore) verify(ui).removeToken(eq(player.id), eq(slot));
+        // else, check that ui.placeToken was called with the player's id and the correct score
+        else verify(ui).placeToken(eq(player.id), eq(slot));
     }
 
     @Test
