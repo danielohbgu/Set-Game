@@ -3,6 +3,7 @@ package bguspl.set.ex;
 import java.util.logging.Level;
 
 import bguspl.set.Env;
+import sun.font.TrueTypeFont;
 
 /**
  * This class manages the players' threads and data
@@ -107,6 +108,19 @@ public class Player implements Runnable {
             env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " terminated.");
         }, "computer-" + id);
         aiThread.start();
+    }
+
+    /**
+     * Checks whether a token is present on the corresponding slot number
+     * @param slot the slot number
+     * @return true iff the token is present on the corresponding slot number
+     */
+    public boolean isTokenPresent(int slot){
+        for (Integer tokenSlot: tokensToSlots)
+            if (tokenSlot == slot)
+                return true;
+
+        return false;
     }
 
     /**
