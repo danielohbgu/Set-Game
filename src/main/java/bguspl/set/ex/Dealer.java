@@ -2,10 +2,7 @@ package bguspl.set.ex;
 
 import bguspl.set.Env;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.BlockingQueue;
@@ -45,7 +42,7 @@ public class Dealer implements Runnable {
      */
     private final Thread timer;
 
-    private final BlockingQueue<Integer> setClaimsQueue;
+    private final Queue<Integer> setClaimsQueue;
 
     /**
      * The time when the dealer needs to reshuffle the deck due to turn timeout.
@@ -56,20 +53,14 @@ public class Dealer implements Runnable {
         this.env = env;
         this.table = table;
         this.players = players;
-        this.setClaimsQueue = new ArrayBlockingQueue<>(1);
+        this.setClaimsQueue = new LinkedList<>();
         deck = IntStream.range(0, env.config.deckSize).boxed().collect(Collectors.toList());
 
         timer = new Thread(() -> {
             while(!shouldFinish()) {
-                updateTimerDisplay(System.currentTimeMillis() == reshuffleTime);
+                updateTimerDisplay(System.currentTimeMillis() >= reshuffleTime);
             }
         });
-
-        // create and run player threads
-        for (Player p : players) {
-            Thread t = new Thread(p);
-            t.start();
-        }
     }
 
     /**
@@ -78,6 +69,9 @@ public class Dealer implements Runnable {
     @Override
     public void run() {
         env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " starting.");
+        for(Player p : players)
+            new Thread(p, "Player #" + p.id).start();
+
         while (!shouldFinish()) {
             // Fill empty table slots with cards from the deck
             placeAllCardsOnTable();
@@ -126,23 +120,41 @@ public class Dealer implements Runnable {
 
     /**
      * Checks cards should be removed from the table and removes them.
+     * @throws UnsupportedOperationException - thrown iff the claimed set contains less than 3 cards
      */
-    private void removeCardsFromTable() {
+    private void removeCardsFromTable() throws UnsupportedOperationException {
         if (!setClaimsQueue.isEmpty()) {
             Integer playerId = setClaimsQueue.remove();
             Player p = players[playerId];
-            int[] claimedSet = p.getTokensToSlots().stream().mapToInt(slot -> table.slotToCard[slot]).toArray();
+            int[] claimedSet = new int[3];
+            Integer[] playerTokens = table.getPlayerTokensSlots(p.id);
+
+            for(int token = 0; token < claimedSet.length; token++)
+                if (playerTokens[token] != null)
+                    claimedSet[token] = table.slotToCard[playerTokens[token]];
+                else
+                    throw new UnsupportedOperationException("WTF?!");
+
             if (env.util.testSet(claimedSet)){
                 for (int card : claimedSet) {
                     int slot = table.cardToSlot[card];
-                    p.removeToken(slot);
                     table.removeCard(slot);
+                    table.removeToken(p.id, slot);
                 }
                 p.point();
+
             }
             else
                 p.penalty();
         }
+    }
+
+    /**
+     * adds a set claim for a specified player
+     * @param player - the player that claimed a set.
+     */
+    public synchronized void addClaim(int player){
+        setClaimsQueue.add(player);
     }
 
     /**
@@ -152,6 +164,9 @@ public class Dealer implements Runnable {
         for (int slot = 0; slot < table.slotToCard.length; slot++)
             if (table.slotToCard[slot] == null && !deck.isEmpty())
                 table.placeCard(deck.remove(deck.size() - 1), slot);
+
+        // reset the reshuffle time
+        reshuffleTime = System.currentTimeMillis() + 61 * 1000;
     }
 
     private void placeAllCardsOnTable() {
@@ -159,9 +174,6 @@ public class Dealer implements Runnable {
         Collections.shuffle(deck);
 
         placeCardsOnTable();
-
-        // reset the reshuffle time
-        reshuffleTime = System.currentTimeMillis() + 61 * 1000;
 
         if (!timer.isAlive())
             timer.start();
@@ -183,10 +195,11 @@ public class Dealer implements Runnable {
      * Reset and/or update the countdown and the countdown display.
      */
     private void updateTimerDisplay(boolean reset) {
-        if(reset)
-            env.ui.setCountdown(61 * 1000, false);
-        else
-            env.ui.setCountdown(reshuffleTime - System.currentTimeMillis(), reshuffleTime - System.currentTimeMillis() <= env.config.turnTimeoutWarningMillis);
+        if(reset) {
+            reshuffleTime = System.currentTimeMillis() + 61 * 1000;
+            synchronized (this) { notify(); }
+        }
+        env.ui.setCountdown(reshuffleTime - System.currentTimeMillis(), reshuffleTime - System.currentTimeMillis() <= env.config.turnTimeoutWarningMillis);
     }
 
     /**

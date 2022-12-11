@@ -1,8 +1,8 @@
 package bguspl.set.ex;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.logging.Level;
 
 import bguspl.set.Env;
@@ -30,10 +30,6 @@ public class Player implements Runnable {
      */
     private final Dealer dealer;
 
-    /**
-     * The slot of each token (null if token is not placed yet)
-     */
-    private final List<Integer> tokensToSlots;
 
     /**
      * The id of the player (starting from 0).
@@ -65,6 +61,10 @@ public class Player implements Runnable {
      */
     private int score;
 
+    private final BlockingQueue<Integer> pendingSlots;
+
+    private long sleepWhenWokenMillis;
+
     /**
      * The class constructor.
      *
@@ -80,7 +80,8 @@ public class Player implements Runnable {
         this.table = table;
         this.id = id;
         this.human = human;
-        this.tokensToSlots = new ArrayList<>();
+        this.pendingSlots = new ArrayBlockingQueue<>(3);
+        this.sleepWhenWokenMillis = 0;
     }
 
     /**
@@ -93,10 +94,18 @@ public class Player implements Runnable {
         if (!human) createArtificialIntelligence();
 
         while (!terminate) {
+            // Wait for key press
             try {
-                wait();
+                synchronized (this) {
+                    System.out.println("Player #"+id+" is waiting...");
+                    wait();
+                    System.out.println("Player #"+id+" is waking...");
+                }
             } catch (InterruptedException ignored) {}
 
+            placeNextToken();
+
+            try { Thread.sleep(sleepWhenWokenMillis); } catch (InterruptedException ignored) {}
         }
         if (!human) try { aiThread.join(); } catch (InterruptedException ignored) {}
         env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " terminated.");
@@ -113,30 +122,10 @@ public class Player implements Runnable {
             while (!terminate) {
                 Random rand = new Random();
                 keyPressed(rand.nextInt(12));
-                try {
-                    synchronized (this) { wait(); }
-                } catch (InterruptedException ignored) {}
             }
             env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " terminated.");
         }, "computer-" + id);
         aiThread.start();
-    }
-
-    /**
-     * Checks whether a token is present on the corresponding slot number
-     * @param slot the slot number
-     * @return true iff the token is present on the corresponding slot number
-     */
-    public boolean isTokenPresent(int slot){
-        return tokensToSlots.contains(slot);
-    }
-
-    public List<Integer> getTokensToSlots() {
-        return tokensToSlots;
-    }
-
-    public void removeToken(int slot){
-        tokensToSlots.remove(slot);
     }
 
     /**
@@ -152,21 +141,35 @@ public class Player implements Runnable {
      * @param slot - the slot corresponding to the key pressed.
      */
     public void keyPressed(int slot) {
-        if (isTokenPresent(slot) && tokensToSlots.size() > 0) {
-            // remove token
-            tokensToSlots.remove(slot);
-            table.removeToken(id, slot);
-        }
-        else if (!isTokenPresent(slot) && tokensToSlots.size() < 3) {
-            // place token
-            tokensToSlots.add(slot);
-            table.placeToken(id, slot);
-        }
+        if (playerThread.getState() != Thread.State.BLOCKED) {
+            if (!pendingSlots.remove(slot))
+                pendingSlots.offer(slot);
 
-        if (tokensToSlots.size() == 3)
-            dealer.notify();
+            synchronized (this) { notify(); }
+        }
+    }
 
-        notifyAll();
+    private void placeNextToken() {
+        if (!pendingSlots.isEmpty()) {
+            int slot = pendingSlots.poll();
+
+            if (!table.placeToken(id, slot))
+                table.removeToken(id, slot);
+
+            sleepWhenWokenMillis = 0;
+
+            // place third token?
+            if (table.getNextFreeToken(id) == -1) {
+                dealer.addClaim(id);
+                synchronized (dealer) { dealer.notify(); }
+
+                // wait for point or penalty
+                try { synchronized (this) { wait(); } } catch (InterruptedException ignored) {}
+
+                // clear key input queue
+                pendingSlots.clear();
+            }
+        }
     }
 
     /**
@@ -176,17 +179,21 @@ public class Player implements Runnable {
      * @post - the player's score is updated in the ui.
      */
     public void point() {
-        // TODO implement
+        sleepWhenWokenMillis = env.config.pointFreezeMillis;
+        synchronized (this) { notify(); }
 
-        int ignored = table.countCards(); // this part is just for demonstration in the unit tests
         env.ui.setScore(id, ++score);
+        env.ui.setFreeze(id, env.config.pointFreezeMillis);
     }
 
     /**
      * Penalize a player and perform other related actions.
      */
     public void penalty() {
-        // TODO implement
+        sleepWhenWokenMillis = env.config.penaltyFreezeMillis;
+        synchronized (this) { notify(); }
+
+        env.ui.setFreeze(id, env.config.penaltyFreezeMillis);
     }
 
     public int getScore() {
