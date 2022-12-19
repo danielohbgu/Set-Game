@@ -69,7 +69,7 @@ public class Player implements Runnable {
     /*
      * The time the player should be freezed until (in milliseconds)
      */
-    private long freezeUntil;
+    private volatile long freezeUntil;
 
     /**
      * The class constructor.
@@ -88,7 +88,7 @@ public class Player implements Runnable {
         this.human = human;
         
         this.pendingSlots = new LinkedList<Integer>();
-        this.freezeUntil = System.currentTimeMillis();
+        this.freezeUntil = Long.MAX_VALUE;
     }
 
     /**
@@ -96,13 +96,13 @@ public class Player implements Runnable {
      */
     @Override
     public void run() {
+        System.out.println(""+id +" created");
         playerThread = Thread.currentThread();
         env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " starting.");
         if (!human) createArtificialIntelligence();
 
         while (!terminate) {
             // Wait for key press
-
             try {
                 synchronized (this) { wait(); }
             } catch (InterruptedException ignored) {}
@@ -119,11 +119,21 @@ public class Player implements Runnable {
      */
     private void createArtificialIntelligence() {
         // note: this is a very very smart AI (!)
+        System.out.println(""+id +" ai created");
         aiThread = new Thread(() -> {
             env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " starting.");
             while (!terminate) {
                 Random rand = new Random();
-                keyPressed(rand.nextInt(12));
+
+                Integer[] tokens = table.getPlayerTokens(id);
+                Integer keyPress = tokens[rand.nextInt(3)];
+                if (keyPress == null)
+                    keyPress = rand.nextInt(12);
+
+                keyPressed(keyPress);
+                try {
+                    Thread.sleep(rand.nextInt(100));
+                } catch (InterruptedException e) {}
             }
             env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " terminated.");
         }, "computer-" + id);
@@ -134,7 +144,7 @@ public class Player implements Runnable {
      * Called when the game should be terminated due to an external event.
      */
     public void terminate() {
-        // TODO implement
+        terminate = true;
     }
 
     /**
@@ -145,11 +155,9 @@ public class Player implements Runnable {
     public void keyPressed(int slot) {
         if (System.currentTimeMillis() >= freezeUntil) {
             pendingSlots.add(slot);
-
             synchronized (this) { notify(); }
         }
     }
-
 
     private void placeNextToken() {
         if (!pendingSlots.isEmpty()) {
@@ -174,6 +182,14 @@ public class Player implements Runnable {
 
     public long getFreezeUntil(){
         return freezeUntil;
+    }
+
+    public void setFreezeUntilToCurrentTime() {
+        this.freezeUntil = System.currentTimeMillis();
+    }
+
+    public void setFreezeUntilToMaxValue() {
+        this.freezeUntil = Long.MAX_VALUE;
     }
 
     /**

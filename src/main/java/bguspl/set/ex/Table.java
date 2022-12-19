@@ -46,6 +46,9 @@ public class Table {
                 playersAndTokenToSlot[i][j] = null;
     }
 
+    public Integer[] getPlayerTokens(int playerId) {
+        return playersAndTokenToSlot[playerId];
+    }
     /**
      * Constructor for actual usage.
      *
@@ -103,29 +106,26 @@ public class Table {
     /**
      * Removes a card from a grid slot on the table.
      * @param slot - the slot from which to remove the card.
+     * @return     - the players that their token was removed from this slot
      */
-    public Integer removeCard(int slot) {
+    public List<Integer> removeCard(int slot) {
         try {
             Thread.sleep(env.config.tableDelayMillis);
         } catch (InterruptedException ignored) {}
 
+        List<Integer> players = new ArrayList<>();
         //remove all tokens placed on the slot
         for (int player = 0; player < env.config.players; player++)
-            for (int token = 0; token < 3; token++)
-                if(playersAndTokenToSlot[player][token] != null && playersAndTokenToSlot[player][token]==slot) {
-                    playersAndTokenToSlot[player][token]=null;
-                    env.ui.removeToken(player,slot);
-                }
-
+            if(removeToken(player, slot))
+                players.add(player);
 
         //remove the card
-        Integer tempCard=slotToCard[slot];
         cardToSlot[slotToCard[slot]] = null;
         slotToCard[slot] = null;
 
         env.ui.removeCard(slot);
 
-        return tempCard;
+        return players;
     }
 
     /**
@@ -141,7 +141,7 @@ public class Table {
                 return false;
 
         int freeToken = getNextFreeToken(player);
-        if (freeToken != -1){
+        if (freeToken != -1 && slotToCard[slot] != null){
             playersAndTokenToSlot[player][freeToken] = slot;
             env.ui.placeToken(player, slot);
             return true;
@@ -154,7 +154,7 @@ public class Table {
      * Removes a token of a player from a grid slot.
      * @param player - the player the token belongs to.
      * @param slot   - the slot from which to remove the token.
-     * @return       - true iff a token was successfully removed.
+     * @return       - true iff a token was removed
      */
     public boolean removeToken(int player, int slot) {
         for (int token = 0; token < 3; token++){
@@ -174,7 +174,8 @@ public class Table {
     public List<Integer> removeAllCardsFromTable(){
         List<Integer> cards=new ArrayList<>();
         for(int i=0; i<env.config.rows*env.config.columns; i++){
-            cards.add(removeCard(i));
+            removeCard(i);
+            cards.add(i);
         }
         return cards;
     }
