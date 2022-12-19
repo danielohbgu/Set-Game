@@ -1,9 +1,11 @@
 package bguspl.set.ex;
 
+import java.util.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.logging.Level;
 
 import bguspl.set.Env;
-import sun.font.TrueTypeFont;
 
 /**
  * This class manages the players' threads and data
@@ -24,9 +26,10 @@ public class Player implements Runnable {
     private final Table table;
 
     /**
-     * The slot of each token (null if token is not placed yet)
+     * The game dealer
      */
-    private final Integer[] tokensToSlots;
+    private final Dealer dealer;
+
 
     /**
      * The id of the player (starting from 0).
@@ -58,6 +61,16 @@ public class Player implements Runnable {
      */
     private int score;
 
+    /*
+     * The slots to be pressed
+     */
+    private final Queue<Integer> pendingSlots;
+
+    /*
+     * The time the player should be freezed until (in milliseconds)
+     */
+    private long freezeUntil;
+
     /**
      * The class constructor.
      *
@@ -69,10 +82,13 @@ public class Player implements Runnable {
      */
     public Player(Env env, Dealer dealer, Table table, int id, boolean human) {
         this.env = env;
+        this.dealer = dealer;
         this.table = table;
         this.id = id;
         this.human = human;
-        this.tokensToSlots = new Integer[3];
+        
+        this.pendingSlots = new LinkedList<Integer>();
+        this.freezeUntil = System.currentTimeMillis();
     }
 
     /**
@@ -85,7 +101,13 @@ public class Player implements Runnable {
         if (!human) createArtificialIntelligence();
 
         while (!terminate) {
-            // TODO implement main player loop
+            // Wait for key press
+
+            try {
+                synchronized (this) { wait(); }
+            } catch (InterruptedException ignored) {}
+
+            placeNextToken();
         }
         if (!human) try { aiThread.join(); } catch (InterruptedException ignored) {}
         env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " terminated.");
@@ -100,27 +122,12 @@ public class Player implements Runnable {
         aiThread = new Thread(() -> {
             env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " starting.");
             while (!terminate) {
-                // TODO implement player key press simulator
-                try {
-                    synchronized (this) { wait(); }
-                } catch (InterruptedException ignored) {}
+                Random rand = new Random();
+                keyPressed(rand.nextInt(12));
             }
             env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " terminated.");
         }, "computer-" + id);
         aiThread.start();
-    }
-
-    /**
-     * Checks whether a token is present on the corresponding slot number
-     * @param slot the slot number
-     * @return true iff the token is present on the corresponding slot number
-     */
-    public boolean isTokenPresent(int slot){
-        for (Integer tokenSlot: tokensToSlots)
-            if (tokenSlot == slot)
-                return true;
-
-        return false;
     }
 
     /**
@@ -136,7 +143,37 @@ public class Player implements Runnable {
      * @param slot - the slot corresponding to the key pressed.
      */
     public void keyPressed(int slot) {
-        // TODO implement
+        if (System.currentTimeMillis() >= freezeUntil) {
+            pendingSlots.add(slot);
+
+            synchronized (this) { notify(); }
+        }
+    }
+
+
+    private void placeNextToken() {
+        if (!pendingSlots.isEmpty()) {
+            int slot = pendingSlots.remove();
+
+            if (!table.placeToken(id, slot))
+                table.removeToken(id, slot);
+
+            // place third token?
+            if (table.getNextFreeToken(id) == -1) {
+                dealer.addClaim(id);
+                synchronized (dealer) { dealer.notify(); }
+
+                // wait for point or penalty
+                try { synchronized (this) { wait(); } } catch (InterruptedException ignored) {}
+
+                // clear key input queue
+                pendingSlots.clear();
+            }
+        }
+    }
+
+    public long getFreezeUntil(){
+        return freezeUntil;
     }
 
     /**
@@ -146,17 +183,21 @@ public class Player implements Runnable {
      * @post - the player's score is updated in the ui.
      */
     public void point() {
-        // TODO implement
+        freezeUntil = System.currentTimeMillis() + env.config.pointFreezeMillis;
+        synchronized (this) { notify(); }
 
-        int ignored = table.countCards(); // this part is just for demonstration in the unit tests
         env.ui.setScore(id, ++score);
+        env.ui.setFreeze(id, env.config.pointFreezeMillis);
     }
 
     /**
      * Penalize a player and perform other related actions.
      */
     public void penalty() {
-        // TODO implement
+        freezeUntil = System.currentTimeMillis() + env.config.penaltyFreezeMillis;
+        synchronized (this) { notify(); }
+
+        env.ui.setFreeze(id, env.config.penaltyFreezeMillis);
     }
 
     public int getScore() {

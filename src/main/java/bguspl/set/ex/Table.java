@@ -2,9 +2,7 @@ package bguspl.set.ex;
 
 import bguspl.set.Env;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -29,6 +27,8 @@ public class Table {
      */
     protected final Integer[] cardToSlot; // slot per card (if any)
 
+    private final Integer[][] playersAndTokenToSlot; //slots with tokens for each player
+
     /**
      * Constructor for testing.
      *
@@ -40,6 +40,10 @@ public class Table {
         this.env = env;
         this.slotToCard = slotToCard;
         this.cardToSlot = cardToSlot;
+        playersAndTokenToSlot = new Integer[env.config.players][3];
+        for (int i = 0; i < env.config.players; i++)
+            for (int j = 0; j < 3; j++)
+                playersAndTokenToSlot[i][j] = null;
     }
 
     /**
@@ -93,28 +97,57 @@ public class Table {
         cardToSlot[card] = slot;
         slotToCard[slot] = card;
 
-        // TODO implement
+        env.ui.placeCard(card, slot);
     }
 
     /**
      * Removes a card from a grid slot on the table.
      * @param slot - the slot from which to remove the card.
      */
-    public void removeCard(int slot) {
+    public Integer removeCard(int slot) {
         try {
             Thread.sleep(env.config.tableDelayMillis);
         } catch (InterruptedException ignored) {}
 
-        // TODO implement
+        //remove all tokens placed on the slot
+        for (int player = 0; player < env.config.players; player++)
+            for (int token = 0; token < 3; token++)
+                if(playersAndTokenToSlot[player][token] != null && playersAndTokenToSlot[player][token]==slot) {
+                    playersAndTokenToSlot[player][token]=null;
+                    env.ui.removeToken(player,slot);
+                }
+
+
+        //remove the card
+        Integer tempCard=slotToCard[slot];
+        cardToSlot[slotToCard[slot]] = null;
+        slotToCard[slot] = null;
+
+        env.ui.removeCard(slot);
+
+        return tempCard;
     }
 
     /**
      * Places a player token on a grid slot.
      * @param player - the player the token belongs to.
      * @param slot   - the slot on which to place the token.
+     * @return       - true iff there is a free token that is placeable on the slot
      */
-    public void placeToken(int player, int slot) {
-        // TODO implement
+    public boolean placeToken(int player, int slot) {
+        // check if a token is placed on the corresponding slot (return false)
+        for (int token = 0; token < 3; token++)
+            if(playersAndTokenToSlot[player][token] != null && playersAndTokenToSlot[player][token] == slot)
+                return false;
+
+        int freeToken = getNextFreeToken(player);
+        if (freeToken != -1){
+            playersAndTokenToSlot[player][freeToken] = slot;
+            env.ui.placeToken(player, slot);
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -124,7 +157,47 @@ public class Table {
      * @return       - true iff a token was successfully removed.
      */
     public boolean removeToken(int player, int slot) {
-        // TODO implement
+        for (int token = 0; token < 3; token++){
+            if(playersAndTokenToSlot[player][token] != null && playersAndTokenToSlot[player][token] == slot) {
+                playersAndTokenToSlot[player][token] = null;
+                env.ui.removeToken(player, slot);
+                return true;
+            }
+        }
         return false;
+    }
+
+
+    /**
+     * Removes all tokens from table (used when we do reshuffle)
+     */
+    public List<Integer> removeAllCardsFromTable(){
+        List<Integer> cards=new ArrayList<>();
+        for(int i=0; i<env.config.rows*env.config.columns; i++){
+            cards.add(removeCard(i));
+        }
+        return cards;
+    }
+
+    /**
+     * checks if a player has a free token, and returns it.
+     * @param player - the player to check for.
+     * @return       - the next free token if exists. else -1.
+     */
+    public int getNextFreeToken(int player){
+        int freeToken = -1;
+        for (int token = 0; token < 3; token++)
+            if(freeToken == -1 && playersAndTokenToSlot[player][token] == null)
+                freeToken = token;
+        return freeToken;
+    }
+
+    /**
+     * gets the tokens slots of the player
+     * @param player - player to get tokens of.
+     * @return       - all the slots of the player tokens
+     */
+    public Integer[] getPlayerTokensSlots(int player){
+        return playersAndTokenToSlot[player];
     }
 }
