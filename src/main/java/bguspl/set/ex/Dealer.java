@@ -49,18 +49,30 @@ public class Dealer implements Runnable {
      */
     private long reshuffleTime = Long.MAX_VALUE;
 
+    private final Object timerLock;
+
     public Dealer(Env env, Table table, Player[] players) {
         this.env = env;
         this.table = table;
         this.players = players;
         this.setClaimsQueue = new LinkedList<>();
         deck = IntStream.range(0, env.config.deckSize).boxed().collect(Collectors.toList());
+        this.timerLock = new Object();
 
         timer = new Thread(() -> {
             while(!shouldFinish()) {
-                updateTimerDisplay(System.currentTimeMillis() >= reshuffleTime);
-                for(int i = 0; i < players.length; i++){
-                    env.ui.setFreeze(i, players[i].getFreezeUntil() - System.currentTimeMillis());
+                synchronized (timerLock) {
+                    if (System.currentTimeMillis() >= reshuffleTime) {
+                        try {
+                                wait();
+
+                        } catch (InterruptedException ignored) {
+                        }
+                    }
+                    updateTimerDisplay(System.currentTimeMillis() >= reshuffleTime);
+                    for (int i = 0; i < players.length; i++) {
+                        env.ui.setFreeze(i, players[i].getFreezeUntil() - System.currentTimeMillis());
+                    }
                 }
             }
         });
@@ -103,6 +115,7 @@ public class Dealer implements Runnable {
             // place cards on the table if needed
             placeCardsOnTable();
         }
+        System.out.println("OUT");
     }
 
     /**
@@ -149,8 +162,6 @@ public class Dealer implements Runnable {
             }
             else
                 p.penalty();
-        }else {
-            removeAllCardsFromTable();
         }
     }
 
@@ -174,11 +185,14 @@ public class Dealer implements Runnable {
             }
 
         // reset the reshuffle time
-        if (placed)
+        if (placed) {
             reshuffleTime = System.currentTimeMillis() + env.config.turnTimeoutMillis;
+            synchronized (this) { notify(); }
+        }
     }
 
     private void placeAllCardsOnTable() {
+        // sync!!!!
         // shuffle the cards
         Collections.shuffle(deck);
 
