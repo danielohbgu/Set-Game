@@ -8,6 +8,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -36,7 +37,7 @@ class PlayerTest {
 
     void assertInvariants() {
         assertTrue(player.id >= 0);
-        assertTrue(player.score() >= 0);
+        assertTrue(player.getScore() >= 0);
     }
 
     @BeforeEach
@@ -54,10 +55,6 @@ class PlayerTest {
 
     @Test
     void point() {
-
-        // force table.countCards to return 3
-        when(table.countCards()).thenReturn(3); // this part is just for demonstration
-
         // calculate the expected score for later
         int expectedScore = player.score() + 1;
 
