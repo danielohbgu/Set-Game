@@ -2,10 +2,7 @@ package bguspl.set.ex;
 
 import bguspl.set.Env;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -105,10 +102,9 @@ public class Table {
 
     /**
      * Removes a card from a grid slot on the table.
-     * does NOT remove tokens
      * @param slot - the slot from which to remove the card.
      */
-    public void removeCard(int slot) {
+    public Integer removeCard(int slot) {
         try {
             Thread.sleep(env.config.tableDelayMillis);
         } catch (InterruptedException ignored) {}
@@ -123,11 +119,13 @@ public class Table {
 
 
         //remove the card
+        Integer tempCard=slotToCard[slot];
         cardToSlot[slotToCard[slot]] = null;
         slotToCard[slot] = null;
 
         env.ui.removeCard(slot);
 
+        return tempCard;
     }
 
     /**
@@ -167,6 +165,18 @@ public class Table {
             }
         }
         return false;
+    }
+
+
+    /**
+     * Removes all tokens from table (used when we do reshuffle)
+     */
+    public List<Integer> removeAllCardsFromTable(){
+        List<Integer> cards=new ArrayList<>();
+        for(int i=0; i<env.config.rows*env.config.columns; i++){
+            cards.add(removeCard(i));
+        }
+        return cards;
     }
 
     /**

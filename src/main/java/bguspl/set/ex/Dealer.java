@@ -146,6 +146,8 @@ public class Dealer implements Runnable {
             }
             else
                 p.penalty();
+        }else {
+            removeAllCardsFromTable();
         }
     }
 
@@ -206,7 +208,9 @@ public class Dealer implements Runnable {
      * Returns all the cards from the table to the deck.
      */
     private void removeAllCardsFromTable() {
-        // TODO implement
+        //removes all cards and token on them from the table and returns a list of these cards
+        List<Integer> cards = table.removeAllCardsFromTable();
+        deck.addAll(cards);
     }
 
     /**

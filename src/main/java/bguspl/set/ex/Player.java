@@ -61,7 +61,7 @@ public class Player implements Runnable {
      */
     private int score;
 
-    private final BlockingQueue<Integer> pendingSlots;
+    private final Queue<Integer> pendingSlots;
 
     private long sleepWhenWokenMillis;
 
@@ -80,7 +80,8 @@ public class Player implements Runnable {
         this.table = table;
         this.id = id;
         this.human = human;
-        this.pendingSlots = new ArrayBlockingQueue<>(3);
+        this.pendingSlots = new LinkedList<Integer>() {
+        };
         this.sleepWhenWokenMillis = 0;
     }
 
@@ -95,11 +96,10 @@ public class Player implements Runnable {
 
         while (!terminate) {
             // Wait for key press
+
             try {
                 synchronized (this) {
-                    System.out.println("Player #"+id+" is waiting...");
                     wait();
-                    System.out.println("Player #"+id+" is waking...");
                 }
             } catch (InterruptedException ignored) {}
 
@@ -142,16 +142,15 @@ public class Player implements Runnable {
      */
     public void keyPressed(int slot) {
         if (playerThread.getState() != Thread.State.BLOCKED) {
-            if (!pendingSlots.remove(slot))
-                pendingSlots.offer(slot);
-
+            pendingSlots.add(slot);
             synchronized (this) { notify(); }
         }
     }
 
+
     private void placeNextToken() {
         if (!pendingSlots.isEmpty()) {
-            int slot = pendingSlots.poll();
+            int slot = pendingSlots.remove();
 
             if (!table.placeToken(id, slot))
                 table.removeToken(id, slot);
