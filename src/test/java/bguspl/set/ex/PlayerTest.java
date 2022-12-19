@@ -56,13 +56,13 @@ class PlayerTest {
     @Test
     void point() {
         // calculate the expected score for later
-        int expectedScore = player.score() + 1;
+        int expectedScore = player.getScore() + 1;
 
         // call the method we are testing
         player.point();
 
         // check that the score was increased correctly
-        assertEquals(expectedScore, player.score());
+        assertEquals(expectedScore, player.getScore());
 
         // check that ui.setScore was called with the player's id and the correct score
         verify(ui).setScore(eq(player.id), eq(expectedScore));
