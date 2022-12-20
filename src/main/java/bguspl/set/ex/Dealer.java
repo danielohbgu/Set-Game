@@ -60,11 +60,9 @@ public class Dealer implements Runnable {
 
         timer = new Thread(() -> {
             while(!Thread.interrupted()) {
-                if (!timeout) {
-                    updateTimerDisplay(System.currentTimeMillis() >= reshuffleTime);
-                    for (int i = 0; i < players.length; i++)
-                        env.ui.setFreeze(i, players[i].getFreezeUntil() - System.currentTimeMillis());
-                }
+                updateTimerDisplay(System.currentTimeMillis() >= reshuffleTime);
+                for (int i = 0; i < players.length; i++)
+                    env.ui.setFreeze(i, players[i].getFreezeUntil() - System.currentTimeMillis());
             }
             System.out.println("TIMER IS DEAD: " + shouldFinish());
         });
@@ -84,7 +82,7 @@ public class Dealer implements Runnable {
         while (!shouldFinish()) {
             // Fill empty table slots with cards from the deck
             placeAllCardsOnTable();
-            System.out.println(timeout);
+
             // Wait for countdown timeout or player set claim
             timerLoop();
 
@@ -208,9 +206,16 @@ public class Dealer implements Runnable {
         // shuffle the cards
         Collections.shuffle(deck);
 
+        // place cards on the table
         placeCardsOnTable();
+        
+        // when finished placing cards - start the timer
+        synchronized (this) { notify(); }
 
+        // srart a new cycle
         timeout = false;
+
+        // cancel freeze for all players
         for(Player p : players) p.setFreezeUntilToCurrentTime();
     }
 
@@ -231,11 +236,21 @@ public class Dealer implements Runnable {
      */
     private void updateTimerDisplay(boolean reset) {
         if(reset) {
+            // next reshuffle in turnTimeoutMillis milliseconds from now
             reshuffleTime = System.currentTimeMillis() + env.config.turnTimeoutMillis;
+            // time is over - timeout
             timeout = true;
-            synchronized (this) { notify(); }
+            synchronized (this) {
+                // notify the dealer about timeout (need to place new cards)
+                 notify(); 
+                 // stop the timer (until finished placing the new cards)
+                 try { wait(); } catch (InterruptedException ignored) {}
+            }
         }
-        env.ui.setCountdown(reshuffleTime - System.currentTimeMillis(), reshuffleTime - System.currentTimeMillis() <= env.config.turnTimeoutWarningMillis);
+
+        // update the timer in the ui
+        env.ui.setCountdown(reshuffleTime - System.currentTimeMillis(), 
+                            reshuffleTime - System.currentTimeMillis() <= env.config.turnTimeoutWarningMillis);
     }
 
     /**
@@ -254,10 +269,13 @@ public class Dealer implements Runnable {
      * Check who is/are the winner/s and displays them.
      */
     private void announceWinners() {
+        // stop the timer
         timer.interrupt();
+        // terminate all players
         for(Player p : players)
             p.terminate();
 
+        // check who won
         int maxScore = -1;
         int winnerCount = 1;
 
@@ -276,7 +294,8 @@ public class Dealer implements Runnable {
                 winners[cur] = i;
                 cur++;
             }
-        
+            
+        // print winners on screen
         env.ui.announceWinner(winners);
 
     }
