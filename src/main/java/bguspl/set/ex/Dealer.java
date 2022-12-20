@@ -64,7 +64,8 @@ public class Dealer implements Runnable {
             while(!Thread.interrupted()) {
                 updateTimerDisplay(System.currentTimeMillis() >= reshuffleTime);
                 for (int i = 0; i < players.length; i++)
-                    env.ui.setFreeze(i, players[i].getFreezeUntil() - System.currentTimeMillis());
+                    if (players[i].getFreezeUntil() < Long.MAX_VALUE)
+                        env.ui.setFreeze(i, players[i].getFreezeUntil() - System.currentTimeMillis());
             }
         });
     }
@@ -108,7 +109,6 @@ public class Dealer implements Runnable {
             // place cards on the table if needed
             placeCardsOnTable();
         }
-        System.out.println("OUT");
     }
 
     /**
@@ -140,37 +140,31 @@ public class Dealer implements Runnable {
 
         int[] claimedSet = new int[3];
         Integer[] playerTokens = table.getPlayerTokens(playerId);
-
+        
         for(int token = 0; token < claimedSet.length; token++)
             if (playerTokens[token] != null)
                 claimedSet[token] = table.slotToCard[playerTokens[token]];
             else {
                 // when a token of the claimed set was removed while waiting for it to be checked
                 synchronized (players[playerId]) {
-                    players[playerId].notify();
+                    players[playerId].notifyAll();
                 }
                 return;
             }
 
         if (env.util.testSet(claimedSet)){
-            System.out.println("TOKENS: " + Arrays.toString(playerTokens));
-            System.out.println("CARDS: " + Arrays.toString(claimedSet));
-            System.out.println("ALL SLOTS TO CARDS: ");
-            Arrays.stream(table.cardToSlot).filter(Objects::nonNull).forEach(slot -> System.out.println(slot + "->" + table.slotToCard[slot]));
             for (int card : claimedSet) {
                 int slot = table.cardToSlot[card];
                 // remove the card
-                synchronized (this) {
-                    for (Integer player : table.removeCard(slot)) 
-                        // for each player that his token was removed
-                        if (!player.equals(playerId))
-                            // remove him from the set claims queue
-                            if (setClaimsQueue.remove(player))
-                                // notify him that he can continue placing tokens
-                                synchronized (players[player]) {
-                                    players[player].notify();
-                                }
-                }
+                for (Integer player : table.removeCard(slot)) 
+                    // for each player that his token was removed
+                    if (!player.equals(playerId))
+                        // remove him from the set claims queue
+                        if (setClaimsQueue.remove(player))
+                            // notify him that he can continue placing tokens
+                            synchronized (players[player]) {
+                                players[player].notifyAll();
+                            }
             }
             players[playerId].point();
         }
@@ -185,8 +179,8 @@ public class Dealer implements Runnable {
     public void addClaim(int player){
         try{ 
             setClaimsQueue.put(player); 
-            setClaimsQueue.forEach(p -> System.out.print(p + Arrays.toString(table.getPlayerTokens(p)) + ", "));
-            System.out.println();
+            // setClaimsQueue.forEach(p -> System.out.print(p + Arrays.toString(table.getPlayerTokens(p)) + ", "));
+            // System.out.println();
         }
         catch (InterruptedException ignored) { terminate(); }
     }
@@ -223,7 +217,7 @@ public class Dealer implements Runnable {
         placeCardsOnTable();
         
         // when finished placing cards - start the timer
-        synchronized (this) { notify(); }
+        synchronized (this) { notifyAll(); }
 
         // srart a new cycle
         timeout = false;
@@ -255,7 +249,7 @@ public class Dealer implements Runnable {
             timeout = true;
             synchronized (this) {
                 // notify the dealer about timeout (need to place new cards)
-                 notify(); 
+                 notifyAll(); 
                  // stop the timer (until finished placing the new cards)
                  try { wait(); } catch (InterruptedException ignored) {}
             }

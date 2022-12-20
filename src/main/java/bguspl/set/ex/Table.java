@@ -55,7 +55,7 @@ public class Table {
         this(env, new Integer[env.config.tableSize], new Integer[env.config.deckSize]);
     }
 
-    public synchronized Integer[] getPlayerTokens(int playerId) {
+    public Integer[] getPlayerTokens(int playerId) {
         return playersAndTokenToSlot[playerId];
     }
     
@@ -66,7 +66,7 @@ public class Table {
         List<Integer> deck = Arrays.stream(slotToCard).filter(Objects::nonNull).collect(Collectors.toList());
         env.util.findSets(deck, Integer.MAX_VALUE).forEach(set -> {
             StringBuilder sb = new StringBuilder().append("Hint: Set found: ");
-            List<Integer> slots = Arrays.stream(set).mapToObj(card -> { System.out.println("CARD: " + cardToSlot[card]); return cardToSlot[card]; }).sorted().collect(Collectors.toList());
+            List<Integer> slots = Arrays.stream(set).mapToObj(card -> cardToSlot[card]).sorted().collect(Collectors.toList());
             int[][] features = env.util.cardsToFeatures(set);
             System.out.println(sb.append("slots: ").append(slots).append(" features: ").append(Arrays.deepToString(features)));
         });
@@ -134,7 +134,7 @@ public class Table {
      * @param slot   - the slot on which to place the token.
      * @return       - true iff there is a free token that is placeable on the slot
      */
-    public synchronized boolean placeToken(int player, int slot) {
+    public boolean placeToken(int player, int slot) {
         // check if a token is placed on the corresponding slot (return false)
         for (int token = 0; token < 3; token++)
             if(playersAndTokenToSlot[player][token] != null && playersAndTokenToSlot[player][token] == slot)
@@ -156,7 +156,7 @@ public class Table {
      * @param slot   - the slot from which to remove the token.
      * @return       - true iff a token was removed
      */
-    public synchronized boolean removeToken(int player, int slot) {
+    public boolean removeToken(int player, int slot) {
         for (int token = 0; token < 3; token++){
             if(playersAndTokenToSlot[player][token] != null && playersAndTokenToSlot[player][token] == slot) {
                 playersAndTokenToSlot[player][token] = null;
@@ -187,7 +187,7 @@ public class Table {
      * @param player - the player to check for.
      * @return       - the next free token if exists. else -1.
      */
-    public synchronized int getNextFreeToken(int player){
+    public int getNextFreeToken(int player){
         int freeToken = -1;
         for (int token = 0; token < 3; token++)
             if(freeToken == -1 && playersAndTokenToSlot[player][token] == null)

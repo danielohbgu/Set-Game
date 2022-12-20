@@ -153,7 +153,7 @@ public class Player implements Runnable {
                 // put the slot in the queue if possible
                 pendingSlots.put(slot);
                 // wake up the player
-                synchronized (this) { notify(); }
+                synchronized (this) { notifyAll(); }
             } catch(InterruptedException ignored) {}
             
         }
@@ -174,13 +174,15 @@ public class Player implements Runnable {
         // place third token?
         if (table.getNextFreeToken(id) == -1) {
             dealer.addClaim(id);
-            synchronized (dealer) { dealer.notify(); }
+            setFreezeUntilToMaxValue();
+            synchronized (dealer) { dealer.notifyAll(); }
 
-            // wait for point or penalty
+            // wait for point, penalty or token removed
             try { synchronized (this) { wait(); } } catch (InterruptedException ignored) {}
-
+            
             // clear key input queue
             pendingSlots.clear();
+            setFreezeUntilToCurrentTime();
         }
     }
 
@@ -204,7 +206,7 @@ public class Player implements Runnable {
      */
     public void point() {
         freezeUntil = System.currentTimeMillis() + env.config.pointFreezeMillis;
-        synchronized (this) { notify(); }
+        synchronized (this) { notifyAll(); }
 
         env.ui.setScore(id, ++score);
         env.ui.setFreeze(id, env.config.pointFreezeMillis);
@@ -215,7 +217,7 @@ public class Player implements Runnable {
      */
     public void penalty() {
         freezeUntil = System.currentTimeMillis() + env.config.penaltyFreezeMillis;
-        synchronized (this) { notify(); }
+        synchronized (this) { notifyAll(); }
 
         env.ui.setFreeze(id, env.config.penaltyFreezeMillis);
     }
