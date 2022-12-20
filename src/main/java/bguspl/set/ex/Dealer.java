@@ -3,6 +3,8 @@ package bguspl.set.ex;
 import bguspl.set.Env;
 
 import java.util.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -41,7 +43,7 @@ public class Dealer implements Runnable {
     /**
      * The queue of players that are claiming a set
      */
-    private final Queue<Integer> setClaimsQueue;
+    private final BlockingQueue<Integer> setClaimsQueue;
 
     /**
      * The time when the dealer needs to reshuffle the deck due to turn timeout.
@@ -54,7 +56,7 @@ public class Dealer implements Runnable {
         this.env = env;
         this.table = table;
         this.players = players;
-        this.setClaimsQueue = new LinkedList<>();
+        this.setClaimsQueue = new ArrayBlockingQueue<>(env.config.players, true);
         deck = IntStream.range(0, env.config.deckSize).boxed().collect(Collectors.toList());
         this.timeout = true;
 
@@ -64,7 +66,6 @@ public class Dealer implements Runnable {
                 for (int i = 0; i < players.length; i++)
                     env.ui.setFreeze(i, players[i].getFreezeUntil() - System.currentTimeMillis());
             }
-            System.out.println("TIMER IS DEAD: " + shouldFinish());
         });
     }
 
@@ -128,58 +129,66 @@ public class Dealer implements Runnable {
 
     /**
      * Checks cards should be removed from the table and removes them.
-     * @throws UnsupportedOperationException - thrown iff the claimed set contains less than 3 cards
      */
-    private void removeCardsFromTable() throws UnsupportedOperationException {
-        if (!setClaimsQueue.isEmpty()) {
-            Integer playerId = setClaimsQueue.remove();
-            int[] claimedSet = new int[3];
-            Integer[] playerTokens = table.getPlayerTokensSlots(playerId);
+    private void removeCardsFromTable() {
+        int playerId;
+        try { playerId = setClaimsQueue.take(); }
+        catch (InterruptedException ignored) {
+            terminate();
+            return;
+        }
 
-            for(int token = 0; token < claimedSet.length; token++)
-                if (playerTokens[token] != null)
-                    claimedSet[token] = table.slotToCard[playerTokens[token]];
-                else {
-                    // when a token of the claimed set was removed while waiting for it to be checked
-                    synchronized (players[playerId]) {
-                        players[playerId].notifyAll();
-                    }
-                    return;
+        int[] claimedSet = new int[3];
+        Integer[] playerTokens = table.getPlayerTokens(playerId);
+
+        for(int token = 0; token < claimedSet.length; token++)
+            if (playerTokens[token] != null)
+                claimedSet[token] = table.slotToCard[playerTokens[token]];
+            else {
+                // when a token of the claimed set was removed while waiting for it to be checked
+                synchronized (players[playerId]) {
+                    players[playerId].notify();
                 }
+                return;
+            }
 
-            if (env.util.testSet(claimedSet)){
-                for (int card : claimedSet) {
-                    int slot = table.cardToSlot[card];
-                    // remove the card
-                    synchronized (this) {
-                        for (Integer player : table.removeCard(slot)) {
-                            // for each player that his token was removed
-                            if (!player.equals(playerId)) {
-                                // remove him from the set claims queue
-                                setClaimsQueue.remove(player);
+        if (env.util.testSet(claimedSet)){
+            System.out.println("TOKENS: " + Arrays.toString(playerTokens));
+            System.out.println("CARDS: " + Arrays.toString(claimedSet));
+            System.out.println("ALL SLOTS TO CARDS: ");
+            Arrays.stream(table.cardToSlot).filter(Objects::nonNull).forEach(slot -> System.out.println(slot + "->" + table.slotToCard[slot]));
+            for (int card : claimedSet) {
+                int slot = table.cardToSlot[card];
+                // remove the card
+                synchronized (this) {
+                    for (Integer player : table.removeCard(slot)) 
+                        // for each player that his token was removed
+                        if (!player.equals(playerId))
+                            // remove him from the set claims queue
+                            if (setClaimsQueue.remove(player))
                                 // notify him that he can continue placing tokens
                                 synchronized (players[player]) {
                                     players[player].notify();
                                 }
-                            }
-                        }
-                    }
-
                 }
-                players[playerId].point();
-
             }
-            else
-                players[playerId].penalty();
+            players[playerId].point();
         }
+        else
+            players[playerId].penalty();
     }
 
     /**
      * adds a set claim for a specified player
      * @param player - the player that claimed a set.
      */
-    public synchronized void addClaim(int player){
-        setClaimsQueue.add(player);
+    public void addClaim(int player){
+        try{ 
+            setClaimsQueue.put(player); 
+            setClaimsQueue.forEach(p -> System.out.print(p + Arrays.toString(table.getPlayerTokens(p)) + ", "));
+            System.out.println();
+        }
+        catch (InterruptedException ignored) { terminate(); }
     }
 
     /**
@@ -200,13 +209,10 @@ public class Dealer implements Runnable {
         }
         // reset the reshuffle time
         if (placed) {
-            reshuffleTime = System.currentTimeMillis() + env.config.turnTimeoutMillis;
             table.hints();
+            reshuffleTime = System.currentTimeMillis() + env.config.turnTimeoutMillis;
             System.out.println("==================================");
         }
-
-
-
     }
 
     private void placeAllCardsOnTable() {

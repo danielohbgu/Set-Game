@@ -87,7 +87,7 @@ public class Player implements Runnable {
         this.id = id;
         this.human = human;
         
-        this.pendingSlots = new ArrayBlockingQueue<>(3);
+        this.pendingSlots = new ArrayBlockingQueue<>(1);
         this.freezeUntil = Long.MAX_VALUE;
     }
 
