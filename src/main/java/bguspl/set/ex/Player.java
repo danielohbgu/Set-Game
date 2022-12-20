@@ -1,6 +1,8 @@
 package bguspl.set.ex;
 
 import java.util.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.logging.Level;
 
 import bguspl.set.Env;
@@ -62,7 +64,7 @@ public class Player implements Runnable {
     /*
      * The slots to be pressed
      */
-    private final Queue<Integer> pendingSlots;
+    private final BlockingQueue<Integer> pendingSlots;
 
     /*
      * The time the player should be freezed until (in milliseconds)
@@ -85,7 +87,7 @@ public class Player implements Runnable {
         this.id = id;
         this.human = human;
         
-        this.pendingSlots = new LinkedList<Integer>();
+        this.pendingSlots = new ArrayBlockingQueue<>(3);
         this.freezeUntil = Long.MAX_VALUE;
     }
 
@@ -100,11 +102,6 @@ public class Player implements Runnable {
         if (!human) createArtificialIntelligence();
 
         while (!terminate) {
-            // Wait for key press
-            try {
-                synchronized (this) { wait(); }
-            } catch (InterruptedException ignored) {}
-
             placeNextToken();
         }
         if (!human) try { aiThread.join(); } catch (InterruptedException ignored) {}
@@ -152,29 +149,38 @@ public class Player implements Runnable {
      */
     public void keyPressed(int slot) {
         if (System.currentTimeMillis() >= freezeUntil) {
-            pendingSlots.add(slot);
-            synchronized (this) { notify(); }
+            try {
+                // put the slot in the queue if possible
+                pendingSlots.put(slot);
+                // wake up the player
+                synchronized (this) { notify(); }
+            } catch(InterruptedException ignored) {}
+            
         }
     }
 
     private void placeNextToken() {
-        if (!pendingSlots.isEmpty()) {
-            int slot = pendingSlots.remove();
+        int slot;
+        try {
+            slot = pendingSlots.take();
+        } catch (InterruptedException ignored) {
+            terminate();
+            return;
+        }
 
-            if (!table.placeToken(id, slot))
-                table.removeToken(id, slot);
+        if (!table.placeToken(id, slot))
+            table.removeToken(id, slot);
 
-            // place third token?
-            if (table.getNextFreeToken(id) == -1) {
-                dealer.addClaim(id);
-                synchronized (dealer) { dealer.notify(); }
+        // place third token?
+        if (table.getNextFreeToken(id) == -1) {
+            dealer.addClaim(id);
+            synchronized (dealer) { dealer.notify(); }
 
-                // wait for point or penalty
-                try { synchronized (this) { wait(); } } catch (InterruptedException ignored) {}
+            // wait for point or penalty
+            try { synchronized (this) { wait(); } } catch (InterruptedException ignored) {}
 
-                // clear key input queue
-                pendingSlots.clear();
-            }
+            // clear key input queue
+            pendingSlots.clear();
         }
     }
 

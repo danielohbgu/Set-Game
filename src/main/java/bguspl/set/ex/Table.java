@@ -174,8 +174,10 @@ public class Table {
     public List<Integer> removeAllCardsFromTable(){
         List<Integer> cards=new ArrayList<>();
         for(int i=0; i<env.config.rows*env.config.columns; i++){
-            removeCard(i);
-            cards.add(i);
+            if(slotToCard[i] != null){
+                removeCard(i);
+                cards.add(i);
+            }
         }
         return cards;
     }
