@@ -142,7 +142,7 @@ public class Dealer implements Runnable {
                 else {
                     // when a token of the claimed set was removed while waiting for it to be checked
                     synchronized (players[playerId]) {
-                        players[playerId].notify();
+                        players[playerId].notifyAll();
                     }
                     return;
                 }
@@ -192,11 +192,11 @@ public class Dealer implements Runnable {
                 table.placeCard(deck.remove(deck.size() - 1), slot);
                 placed = true;
             }
+
         if(env.util.findSets(table.getAllCardsOnTable(),1).size()==0){
             System.out.println("No sets on table");
             removeAllCardsFromTable();
-            placeCardsOnTable();
-            return;
+            placeAllCardsOnTable();
         }
         // reset the reshuffle time
         if (placed) {
