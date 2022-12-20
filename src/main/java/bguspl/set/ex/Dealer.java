@@ -192,13 +192,20 @@ public class Dealer implements Runnable {
                 table.placeCard(deck.remove(deck.size() - 1), slot);
                 placed = true;
             }
-
+        if(env.util.findSets(table.getAllCardsOnTable(),1).size()==0){
+            System.out.println("No sets on table");
+            removeAllCardsFromTable();
+            placeCardsOnTable();
+            return;
+        }
         // reset the reshuffle time
         if (placed) {
             reshuffleTime = System.currentTimeMillis() + env.config.turnTimeoutMillis;
             table.hints();
             System.out.println("==================================");
         }
+
+
 
     }
 
@@ -299,4 +306,5 @@ public class Dealer implements Runnable {
         env.ui.announceWinner(winners);
 
     }
+
 }

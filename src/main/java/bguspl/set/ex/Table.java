@@ -203,4 +203,16 @@ public class Table {
     public Integer[] getPlayerTokensSlots(int player){
         return playersAndTokenToSlot[player];
     }
+
+    /**
+     *
+     * @return
+     */
+    public List<Integer> getAllCardsOnTable(){
+        List<Integer> cards=new ArrayList<>();
+        for(int i=0; i<12; i++){
+            cards.add(slotToCard[i]);
+        }
+        return cards;
+    }
 }
